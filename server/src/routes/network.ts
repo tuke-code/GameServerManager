@@ -4,6 +4,7 @@ import net from 'net'
 import http from 'http'
 import https from 'https'
 import { URL } from 'url'
+import { httpPingWithRedirects } from '../utils/httpPingWithRedirects.js'
 
 const router = Router()
 
@@ -18,6 +19,7 @@ interface NetworkCheckItem {
   checkType?: NetworkCheckType
   port?: number
   expectedStatusCode?: number
+  followRedirects?: boolean
   responseTime?: number
   errorMessage?: string
 }
@@ -29,8 +31,9 @@ const networkCheckItems: NetworkCheckItem[] = [
   { id: 'steamworks-api', name: 'Steamworks API(全球)', url: 'api.steampowered.com', status: 'pending' },
   { id: 'steamworks-partner', name: 'Steamworks API（合作/私有）', url: 'partner.steam-api.com', status: 'pending' },
   // Modrinth
-  { id: 'modrinth-api', name: 'Modrinth API', url: 'api.modrinth.com', status: 'pending' },
-  { id: 'modrinth-cdn', name: 'Modrinth CDN', url: 'cdn.modrinth.com', status: 'pending' },
+  // 根路径会返回重定向，使用实际资源并避免回退到无关的 TCP 80 检测。
+  { id: 'modrinth-api', name: 'Modrinth API', url: 'https://api.modrinth.com/v2/tag/category', status: 'pending', checkType: 'http', followRedirects: true },
+  { id: 'modrinth-cdn', name: 'Modrinth CDN', url: 'https://cdn.modrinth.com/data/P7dR8mSH/icon.png', status: 'pending', checkType: 'http', followRedirects: true },
   // Minecraft
   { id: 'mojang-session', name: 'Mojang 会话服务器', url: 'sessionserver.mojang.com', status: 'pending' },
   { id: 'msl-api', name: 'MSL API', url: 'https://api.mslmc.cn/v3', status: 'pending' },
@@ -184,7 +187,9 @@ async function checkItem(
   }
 
   if (item.checkType === 'http') {
-    return httpPing(item.url, timeout, item.expectedStatusCode)
+    return item.followRedirects
+      ? httpPingWithRedirects(item.url, timeout, item.expectedStatusCode)
+      : httpPing(item.url, timeout, item.expectedStatusCode)
   }
 
   return checkUrl(item.url, timeout, item.expectedStatusCode)
@@ -266,4 +271,3 @@ router.post('/check-single', authenticateToken, async (req: Request, res: Respon
 })
 
 export default router
-
